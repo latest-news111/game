@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Snake (Touch + Scale + Encrypted)</title>
+<title>Snake (Fixed Grid + Smooth + Touch)</title>
 
 <style>
 body {
@@ -15,7 +15,6 @@ body {
   margin: 0;
   font-family: sans-serif;
   flex-direction: column;
-  touch-action: none; /* important for swipe */
 }
 
 #topBar {
@@ -24,21 +23,6 @@ body {
   left: 10px;
   display: flex;
   gap: 5px;
-  z-index: 100;
-}
-
-button {
-  padding: 5px 10px;
-  font-size: 14px;
-}
-
-#scoreBoard {
-  font-size: 24px;
-  margin-bottom: 10px;
-}
-
-#gameWrapper {
-  transform-origin: top center;
 }
 
 canvas {
@@ -49,14 +33,18 @@ canvas {
   image-rendering: pixelated;
 }
 
+#gameWrapper {
+  transform-origin: top center;
+}
+
 #menu {
   position: absolute;
-  text-align: center;
   display: none;
   padding: 20px;
   background: rgba(0,0,0,0.9);
   border: 2px solid red;
   border-radius: 10px;
+  text-align: center;
 }
 </style>
 </head>
@@ -78,7 +66,6 @@ canvas {
 <div id="menu">
   <h1>Game Over</h1>
   <p id="scoreText"></p>
-
   <select id="difficultySelect">
     <option>Too Easy</option>
     <option>Easy</option>
@@ -87,15 +74,13 @@ canvas {
     <option>Hard</option>
     <option>Impossible</option>
   </select>
-
   <div id="highScoresList"></div>
-
   <button onclick="restartGame()">Play Again</button>
   <button onclick="quitGame()">Quit</button>
 </div>
 
 <script>
-// ---------------- SCALE ----------------
+// -------- SCALE --------
 let scale = 1;
 const wrapper = document.getElementById("gameWrapper");
 
@@ -109,16 +94,15 @@ zoomOutBtn.onclick = () => {
   wrapper.style.transform = `scale(${scale})`;
 };
 
-// ---------------- ENCRYPT ----------------
-const key = "secret";
-const enc = s => btoa([...s].map(c=>String.fromCharCode(c.charCodeAt(0)^key.charCodeAt(0))).join(""));
-const dec = s => {
-  try {
-    return parseInt([...atob(s)].map(c=>String.fromCharCode(c.charCodeAt(0)^key.charCodeAt(0))).join(""));
-  } catch { return 0; }
+// -------- ENCRYPT --------
+const key="secret";
+const enc=s=>btoa([...s].map(c=>String.fromCharCode(c.charCodeAt(0)^key.charCodeAt(0))).join(""));
+const dec=s=>{
+  try{return parseInt([...atob(s)].map(c=>String.fromCharCode(c.charCodeAt(0)^key.charCodeAt(0))).join(""));}
+  catch{return 0;}
 };
 
-// ---------------- SETUP ----------------
+// -------- SETUP --------
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
@@ -129,10 +113,11 @@ const difficultySelect = document.getElementById("difficultySelect");
 const highScoresList = document.getElementById("highScoresList");
 
 const grid = 20;
+const tileCount = 20;
 
 let snake, pixelSnake, direction, nextDirection;
 let food, score, gameOver, started;
-let moveInterval, moveTimer;
+let moveInterval, lastMoveTime;
 
 const speeds = {
   "Too Easy":200,
@@ -143,29 +128,32 @@ const speeds = {
   "Impossible":25
 };
 
-// ---------------- IMAGES ----------------
+// -------- IMAGES --------
 const headImg = new Image();
 headImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAtklEQVR4AYyOwQ3CQAwED9786IAGePGgByT6oQAkSqAACkCiC140QCsHc2KR4yT2RVr5bO9OvCzBd12tKwosJQREQe0mAZv7oaLLbV8Qb6SQrX8Aht+51Rrcu4Hxat4AGvA3LbKqTANY83dh28F7ajcCDBKuOe9eBdlxN8AGeSNAXQCZT89tseoC2DABr/CCLAwsBGDgZOqcUsBcUPMGeB8fCw1Udb56X5VpAL9Un52PLwRgyPQBAAD//zi8y3MAAAAGSURBVAMACVo+FYZZcBQAAAAASUVORK5CYII=";
 
 const bodyImg = new Image();
 bodyImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAuklEQVR4AYzOwQ3CMBSD4Sp7cGEBTmzBRAzALFyZgxNLsEarr5KrtE2kVPqVPPvZTbl+HvOR9/8y46i35jJ1vuf31nH2crdgv9aeXvffdCogjvzdntpdQURGDzvwE2wFtdgK88ETdKIQYegRXxD13voCImojd2EeotXnWmAJtTF6L5ohoATuNS0t/voCg5IgEGj8zPVJ3woMQQjHmRZ4ypoFDFjqkaJTQYJZ6BVEPxUwhJ0jNAvyipGCBQAA//8HqZePAAAABklEQVQDAEK1gBkbAveoAAAAAElFTkSuQmCC";
 
-// ---------------- HIGHSCORES ----------------
-let highs = {};
+// -------- HIGHSCORES --------
+let highs={};
 Object.keys(speeds).forEach(d=>{
-  highs[d] = dec(localStorage.getItem("snake_"+d)) || 0;
+  highs[d]=dec(localStorage.getItem("snake_"+d))||0;
 });
 
-// ---------------- INIT ----------------
+// -------- INIT --------
 function init(){
-  snake=[{x:160,y:160}];
-  pixelSnake=[{x:160,y:160}];
+  snake=[{x:10,y:10}]; // GRID positions now
+  pixelSnake=[{x:10,y:10}];
+
   direction={x:0,y:-1};
   nextDirection={x:0,y:-1};
+
   score=0;
   gameOver=false;
   started=false;
-  moveInterval = speeds[difficultySelect.value];
+
+  moveInterval=speeds[difficultySelect.value];
   spawnFood();
   updateScore();
   menu.style.display="none";
@@ -173,38 +161,12 @@ function init(){
 
 function spawnFood(){
   food={
-    x:Math.floor(Math.random()*20)*grid,
-    y:Math.floor(Math.random()*20)*grid
+    x:Math.floor(Math.random()*tileCount),
+    y:Math.floor(Math.random()*tileCount)
   };
 }
 
-// ---------------- TOUCH CONTROLS ----------------
-let touchStartX = 0;
-let touchStartY = 0;
-
-canvas.addEventListener("touchstart", e => {
-  const t = e.touches[0];
-  touchStartX = t.clientX;
-  touchStartY = t.clientY;
-});
-
-canvas.addEventListener("touchend", e => {
-  const t = e.changedTouches[0];
-  const dx = t.clientX - touchStartX;
-  const dy = t.clientY - touchStartY;
-
-  started = true;
-
-  if (Math.abs(dx) > Math.abs(dy)) {
-    if (dx > 0 && direction.x === 0) nextDirection = {x:1,y:0};
-    if (dx < 0 && direction.x === 0) nextDirection = {x:-1,y:0};
-  } else {
-    if (dy > 0 && direction.y === 0) nextDirection = {x:0,y:1};
-    if (dy < 0 && direction.y === 0) nextDirection = {x:0,y:-1};
-  }
-});
-
-// ---------------- KEYBOARD ----------------
+// -------- INPUT --------
 window.addEventListener("keydown", e=>{
   started=true;
   if(e.key==="ArrowUp"||e.key==="w") if(direction.y===0) nextDirection={x:0,y:-1};
@@ -213,16 +175,37 @@ window.addEventListener("keydown", e=>{
   if(e.key==="ArrowRight"||e.key==="d") if(direction.x===0) nextDirection={x:1,y:0};
 });
 
-// ---------------- GAME LOOP ----------------
+// TOUCH (FIXED)
+let sx=0, sy=0;
+canvas.addEventListener("touchstart", e=>{
+  sx=e.touches[0].clientX;
+  sy=e.touches[0].clientY;
+});
+canvas.addEventListener("touchend", e=>{
+  let dx=e.changedTouches[0].clientX-sx;
+  let dy=e.changedTouches[0].clientY-sy;
+
+  started=true;
+
+  if(Math.abs(dx)>Math.abs(dy)){
+    if(dx>0 && direction.x===0) nextDirection={x:1,y:0};
+    if(dx<0 && direction.x===0) nextDirection={x:-1,y:0};
+  } else {
+    if(dy>0 && direction.y===0) nextDirection={x:0,y:1};
+    if(dy<0 && direction.y===0) nextDirection={x:0,y:-1};
+  }
+});
+
+// -------- GAME --------
 function moveSnake(){
   direction=nextDirection;
 
   const head={
-    x:snake[0].x+direction.x*grid,
-    y:snake[0].y+direction.y*grid
+    x:snake[0].x+direction.x,
+    y:snake[0].y+direction.y
   };
 
-  if(head.x<0||head.y<0||head.x>=400||head.y>=400){
+  if(head.x<0||head.y<0||head.x>=tileCount||head.y>=tileCount){
     showGameOver(); return;
   }
 
@@ -241,35 +224,40 @@ function moveSnake(){
   }
 }
 
+// -------- LOOP --------
 function loop(t){
-  if(gameOver || !started){ requestAnimationFrame(loop); return; }
-
-  if(!moveTimer) moveTimer=t;
-  if(t-moveTimer > moveInterval){
-    moveSnake();
-    moveTimer=t;
+  if(!started || gameOver){
+    requestAnimationFrame(loop); return;
   }
 
+  if(!lastMoveTime) lastMoveTime=t;
+
+  if(t-lastMoveTime > moveInterval){
+    moveSnake();
+    lastMoveTime=t;
+  }
+
+  // smooth but locked to grid target
   snake.forEach((s,i)=>{
     if(!pixelSnake[i]) pixelSnake[i]={x:s.x,y:s.y};
-    pixelSnake[i].x += (s.x-pixelSnake[i].x)*0.4;
-    pixelSnake[i].y += (s.y-pixelSnake[i].y)*0.4;
+    pixelSnake[i].x += (s.x - pixelSnake[i].x)*0.25;
+    pixelSnake[i].y += (s.y - pixelSnake[i].y)*0.25;
   });
 
   draw();
   requestAnimationFrame(loop);
 }
 
-// ---------------- DRAW ----------------
+// -------- DRAW --------
 function draw(){
   ctx.clearRect(0,0,400,400);
 
   ctx.font="18px serif";
-  ctx.fillText("🍎", food.x+10, food.y+10);
+  ctx.fillText("🍎", food.x*grid+10, food.y*grid+10);
 
   pixelSnake.forEach((s,i)=>{
     ctx.save();
-    ctx.translate(s.x+10, s.y+10);
+    ctx.translate(s.x*grid+10, s.y*grid+10);
 
     let angle=0;
     if(i===0){
@@ -286,16 +274,16 @@ function draw(){
   });
 }
 
-// ---------------- UI ----------------
+// -------- UI --------
 function updateScore(){
   scoreBoard.textContent="🏆: "+score;
 }
 
 function showGameOver(){
   gameOver=true;
+  let d=difficultySelect.value;
 
-  let d = difficultySelect.value;
-  if(score > highs[d]){
+  if(score>highs[d]){
     highs[d]=score;
     localStorage.setItem("snake_"+d, enc(score.toString()));
   }
@@ -304,7 +292,7 @@ function showGameOver(){
 
   highScoresList.innerHTML="<b>High Scores</b><br>";
   for(let k in highs){
-    highScoresList.innerHTML += `${k}: ${highs[k]}<br>`;
+    highScoresList.innerHTML+=`${k}: ${highs[k]}<br>`;
   }
 
   menu.style.display="block";
@@ -315,12 +303,13 @@ function restartGame(){ init(); }
 function quitGame(){
   menu.innerHTML="<h1>Thanks for playing!</h1>";
   setTimeout(()=>{
-    try{ window.close(); }
-    catch{ alert("Close tab to exit"); }
+    try{window.close();}
+    catch{alert("Close tab to exit");}
   },5000);
 }
 
-document.getElementById("resetScoresBtn").onclick = ()=>{
+// reset
+resetScoresBtn.onclick=()=>{
   Object.keys(highs).forEach(d=>{
     localStorage.removeItem("snake_"+d);
     highs[d]=0;
@@ -328,7 +317,7 @@ document.getElementById("resetScoresBtn").onclick = ()=>{
   alert("Scores reset");
 };
 
-// ---------------- START ----------------
+// -------- START --------
 init();
 requestAnimationFrame(loop);
 </script>
