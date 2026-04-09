@@ -2,49 +2,49 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Snake (Fixed Grid + Smooth + Touch)</title>
+<title>Snake Ultimate</title>
 
 <style>
 body {
-  background: #111;
-  color: #fff;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  margin: 0;
-  font-family: sans-serif;
-  flex-direction: column;
+  background:#111;
+  color:#fff;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+  margin:0;
+  font-family:sans-serif;
+  flex-direction:column;
 }
 
-#topBar {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  display: flex;
-  gap: 5px;
+#topBar{
+  position:absolute;
+  top:10px;
+  left:10px;
+  display:flex;
+  gap:5px;
 }
 
-canvas {
-  background: #000;
-  border: 6px solid red;
-  width: 800px;
-  height: 800px;
-  image-rendering: pixelated;
+canvas{
+  background:#000;
+  border:8px solid red;
+  width:800px;
+  height:800px;
+  image-rendering:pixelated;
 }
 
-#gameWrapper {
-  transform-origin: top center;
+#gameWrapper{
+  transform-origin:top center;
 }
 
-#menu {
-  position: absolute;
-  display: none;
-  padding: 20px;
-  background: rgba(0,0,0,0.9);
-  border: 2px solid red;
-  border-radius: 10px;
-  text-align: center;
+#menu{
+  position:absolute;
+  display:none;
+  padding:20px;
+  background:rgba(0,0,0,0.95);
+  border:3px solid red;
+  border-radius:10px;
+  text-align:center;
 }
 </style>
 </head>
@@ -66,6 +66,7 @@ canvas {
 <div id="menu">
   <h1>Game Over</h1>
   <p id="scoreText"></p>
+
   <select id="difficultySelect">
     <option>Too Easy</option>
     <option>Easy</option>
@@ -74,52 +75,47 @@ canvas {
     <option>Hard</option>
     <option>Impossible</option>
   </select>
+
   <div id="highScoresList"></div>
+
   <button onclick="restartGame()">Play Again</button>
   <button onclick="quitGame()">Quit</button>
 </div>
 
 <script>
 // -------- SCALE --------
-let scale = 1;
-const wrapper = document.getElementById("gameWrapper");
+let scale=1;
+zoomInBtn.onclick=()=>wrapper.style.transform=`scale(${scale+=0.1})`;
+zoomOutBtn.onclick=()=>wrapper.style.transform=`scale(${scale=Math.max(0.5,scale-0.1)})`;
 
-zoomInBtn.onclick = () => {
-  scale += 0.1;
-  wrapper.style.transform = `scale(${scale})`;
-};
-
-zoomOutBtn.onclick = () => {
-  scale = Math.max(0.5, scale - 0.1);
-  wrapper.style.transform = `scale(${scale})`;
-};
+const wrapper=document.getElementById("gameWrapper");
 
 // -------- ENCRYPT --------
-const key="secret";
+const key="k";
 const enc=s=>btoa([...s].map(c=>String.fromCharCode(c.charCodeAt(0)^key.charCodeAt(0))).join(""));
 const dec=s=>{
-  try{return parseInt([...atob(s)].map(c=>String.fromCharCode(c.charCodeAt(0)^key.charCodeAt(0))).join(""));}
-  catch{return 0;}
+  try{return parseInt([...atob(s)].map(c=>String.fromCharCode(c.charCodeAt(0)^key.charCodeAt(0))).join(""));}catch{return 0;}
 };
 
 // -------- SETUP --------
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
 
-const menu = document.getElementById("menu");
-const scoreText = document.getElementById("scoreText");
-const scoreBoard = document.getElementById("scoreBoard");
-const difficultySelect = document.getElementById("difficultySelect");
-const highScoresList = document.getElementById("highScoresList");
+const menu=document.getElementById("menu");
+const scoreText=document.getElementById("scoreText");
+const scoreBoard=document.getElementById("scoreBoard");
+const difficultySelect=document.getElementById("difficultySelect");
+const highScoresList=document.getElementById("highScoresList");
 
-const grid = 20;
-const tileCount = 20;
+const grid=20;
+const tileCount=20;
 
-let snake, pixelSnake, direction, nextDirection;
-let food, score, gameOver, started;
-let moveInterval, lastMoveTime;
+let snake,pixelSnake,direction,nextDirection;
+let food,score,gameOver,started;
+let moveInterval,lastMove;
 
-const speeds = {
+// -------- SPEEDS --------
+const speeds={
   "Too Easy":200,
   "Easy":150,
   "Medium":100,
@@ -129,11 +125,14 @@ const speeds = {
 };
 
 // -------- IMAGES --------
-const headImg = new Image();
-headImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAtklEQVR4AYyOwQ3CQAwED9786IAGePGgByT6oQAkSqAACkCiC140QCsHc2KR4yT2RVr5bO9OvCzBd12tKwosJQREQe0mAZv7oaLLbV8Qb6SQrX8Aht+51Rrcu4Hxat4AGvA3LbKqTANY83dh28F7ajcCDBKuOe9eBdlxN8AGeSNAXQCZT89tseoC2DABr/CCLAwsBGDgZOqcUsBcUPMGeB8fCw1Udb56X5VpAL9Un52PLwRgyPQBAAD//zi8y3MAAAAGSURBVAMACVo+FYZZcBQAAAAASUVORK5CYII=";
+const headImg=new Image();
+headImg.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAtklEQVR4AYyOwQ3CQAwED9786IAGePGgByT6oQAkSqAACkCiC140QCsHc2KR4yT2RVr5bO9OvCzBd12tKwosJQREQe0mAZv7oaLLbV8Qb6SQrX8Aht+51Rrcu4Hxat4AGvA3LbKqTANY83dh28F7ajcCDBKuOe9eBdlxN8AGeSNAXQCZT89tseoC2DABr/CCLAwsBGDgZOqcUsBcUPMGeB8fCw1Udb56X5VpAL9Un52PLwRgyPQBAAD//zi8y3MAAAAGSURBVAMACVo+FYZZcBQAAAAASUVORK5CYII=";
 
-const bodyImg = new Image();
-bodyImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAuklEQVR4AYzOwQ3CMBSD4Sp7cGEBTmzBRAzALFyZgxNLsEarr5KrtE2kVPqVPPvZTbl+HvOR9/8y46i35jJ1vuf31nH2crdgv9aeXvffdCogjvzdntpdQURGDzvwE2wFtdgK88ETdKIQYegRXxD13voCImojd2EeotXnWmAJtTF6L5ohoATuNS0t/voCg5IgEGj8zPVJ3woMQQjHmRZ4ypoFDFjqkaJTQYJZ6BVEPxUwhJ0jNAvyipGCBQAA//8HqZePAAAABklEQVQDAEK1gBkbAveoAAAAAElFTkSuQmCC";
+const bodyImg=new Image();
+bodyImg.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAuklEQVR4AYzOwQ3CMBSD4Sp7cGEBTmzBRAzALFyZgxNLsEarr5KrtE2kVPqVPPvZTbl+HvOR9/8y46i35jJ1vuf31nH2crdgv9aeXvffdCogjvzdntpdQURGDzvwE2wFtdgK88ETdKIQYegRXxD13voCImojd2EeotXnWmAJtTF6L5ohoATuNS0t/voCg5IgEGj8zPVJ3woMQQjHmRZ4ypoFDFjqkaJTQYJZ6BVEPxUwhJ0jNAvyipGCBQAA//8HqZePAAAABklEQVQDAEK1gBkbAveoAAAAAElFTkSuQmCC";
+
+const appleImg=new Image();
+appleImg.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAPCAYAAADJViUEAAAAbUlEQVR4AWMYBaNgFIyCUQxEw0AEYBxVSFZgYGB4z8DAwMDA8J+BgYHhPwPDfyYmJiYGBgYGhj8DAwMDw38GBgaGfwYGBgaGfxkYGBgYGJj+////PwPDfyYmBgYGhv8MDAwMDAyMjIwMDAwAAHsqDA1H4n8VAAAAAElFTkSuQmCC";
 
 // -------- HIGHSCORES --------
 let highs={};
@@ -143,7 +142,7 @@ Object.keys(speeds).forEach(d=>{
 
 // -------- INIT --------
 function init(){
-  snake=[{x:10,y:10}]; // GRID positions now
+  snake=[{x:10,y:10}];
   pixelSnake=[{x:10,y:10}];
 
   direction={x:0,y:-1};
@@ -167,36 +166,35 @@ function spawnFood(){
 }
 
 // -------- INPUT --------
-window.addEventListener("keydown", e=>{
+window.addEventListener("keydown",e=>{
   started=true;
-  if(e.key==="ArrowUp"||e.key==="w") if(direction.y===0) nextDirection={x:0,y:-1};
-  if(e.key==="ArrowDown"||e.key==="s") if(direction.y===0) nextDirection={x:0,y:1};
-  if(e.key==="ArrowLeft"||e.key==="a") if(direction.x===0) nextDirection={x:-1,y:0};
-  if(e.key==="ArrowRight"||e.key==="d") if(direction.x===0) nextDirection={x:1,y:0};
+  if((e.key==="ArrowUp"||e.key==="w")&&direction.y===0) nextDirection={x:0,y:-1};
+  if((e.key==="ArrowDown"||e.key==="s")&&direction.y===0) nextDirection={x:0,y:1};
+  if((e.key==="ArrowLeft"||e.key==="a")&&direction.x===0) nextDirection={x:-1,y:0};
+  if((e.key==="ArrowRight"||e.key==="d")&&direction.x===0) nextDirection={x:1,y:0};
 });
 
-// TOUCH (FIXED)
-let sx=0, sy=0;
-canvas.addEventListener("touchstart", e=>{
+// TOUCH
+let sx,sy;
+canvas.addEventListener("touchstart",e=>{
   sx=e.touches[0].clientX;
   sy=e.touches[0].clientY;
 });
-canvas.addEventListener("touchend", e=>{
+canvas.addEventListener("touchend",e=>{
   let dx=e.changedTouches[0].clientX-sx;
   let dy=e.changedTouches[0].clientY-sy;
-
   started=true;
 
   if(Math.abs(dx)>Math.abs(dy)){
     if(dx>0 && direction.x===0) nextDirection={x:1,y:0};
     if(dx<0 && direction.x===0) nextDirection={x:-1,y:0};
-  } else {
+  }else{
     if(dy>0 && direction.y===0) nextDirection={x:0,y:1};
     if(dy<0 && direction.y===0) nextDirection={x:0,y:-1};
   }
 });
 
-// -------- GAME --------
+// -------- MOVE --------
 function moveSnake(){
   direction=nextDirection;
 
@@ -206,42 +204,40 @@ function moveSnake(){
   };
 
   if(head.x<0||head.y<0||head.x>=tileCount||head.y>=tileCount){
-    showGameOver(); return;
+    showGameOver();return;
   }
 
   snake.unshift(head);
 
   if(head.x===food.x && head.y===food.y){
     score++; updateScore(); spawnFood();
-  } else {
-    snake.pop(); pixelSnake.pop();
+  }else{
+    snake.pop();
+    pixelSnake.pop();
   }
 
   for(let i=1;i<snake.length;i++){
     if(head.x===snake[i].x && head.y===snake[i].y){
-      showGameOver(); return;
+      showGameOver();return;
     }
   }
 }
 
 // -------- LOOP --------
 function loop(t){
-  if(!started || gameOver){
-    requestAnimationFrame(loop); return;
-  }
+  if(!started||gameOver){requestAnimationFrame(loop);return;}
 
-  if(!lastMoveTime) lastMoveTime=t;
+  if(!lastMove) lastMove=t;
 
-  if(t-lastMoveTime > moveInterval){
+  if(t-lastMove>moveInterval){
     moveSnake();
-    lastMoveTime=t;
+    lastMove=t;
   }
 
-  // smooth but locked to grid target
   snake.forEach((s,i)=>{
     if(!pixelSnake[i]) pixelSnake[i]={x:s.x,y:s.y};
-    pixelSnake[i].x += (s.x - pixelSnake[i].x)*0.25;
-    pixelSnake[i].y += (s.y - pixelSnake[i].y)*0.25;
+    pixelSnake[i].x+=(s.x-pixelSnake[i].x)*0.25;
+    pixelSnake[i].y+=(s.y-pixelSnake[i].y)*0.25;
   });
 
   draw();
@@ -252,12 +248,18 @@ function loop(t){
 function draw(){
   ctx.clearRect(0,0,400,400);
 
-  ctx.font="18px serif";
-  ctx.fillText("🍎", food.x*grid+10, food.y*grid+10);
+  // APPLE (FIXED GRID)
+  ctx.drawImage(
+    appleImg,
+    food.x*grid,
+    food.y*grid,
+    grid,
+    grid
+  );
 
   pixelSnake.forEach((s,i)=>{
     ctx.save();
-    ctx.translate(s.x*grid+10, s.y*grid+10);
+    ctx.translate(s.x*grid+10,s.y*grid+10);
 
     let angle=0;
     if(i===0){
@@ -266,7 +268,7 @@ function draw(){
       if(direction.y===1) angle=Math.PI;
       ctx.rotate(angle);
       ctx.drawImage(headImg,-10,-10,20,20);
-    } else {
+    }else{
       ctx.drawImage(bodyImg,-10,-10,20,20);
     }
 
@@ -285,7 +287,7 @@ function showGameOver(){
 
   if(score>highs[d]){
     highs[d]=score;
-    localStorage.setItem("snake_"+d, enc(score.toString()));
+    localStorage.setItem("snake_"+d,enc(score.toString()));
   }
 
   scoreText.textContent="Score: "+score;
@@ -298,7 +300,7 @@ function showGameOver(){
   menu.style.display="block";
 }
 
-function restartGame(){ init(); }
+function restartGame(){init();}
 
 function quitGame(){
   menu.innerHTML="<h1>Thanks for playing!</h1>";
@@ -308,7 +310,7 @@ function quitGame(){
   },5000);
 }
 
-// reset
+// RESET
 resetScoresBtn.onclick=()=>{
   Object.keys(highs).forEach(d=>{
     localStorage.removeItem("snake_"+d);
@@ -317,7 +319,7 @@ resetScoresBtn.onclick=()=>{
   alert("Scores reset");
 };
 
-// -------- START --------
+// START
 init();
 requestAnimationFrame(loop);
 </script>
