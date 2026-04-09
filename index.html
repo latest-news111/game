@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Snake Ultimate</title>
+<title>Snake (True Scaling)</title>
 
 <style>
-body {
+body{
   background:#111;
   color:#fff;
   display:flex;
@@ -28,13 +28,7 @@ body {
 canvas{
   background:#000;
   border:8px solid red;
-  width:800px;
-  height:800px;
   image-rendering:pixelated;
-}
-
-#gameWrapper{
-  transform-origin:top center;
 }
 
 #menu{
@@ -59,9 +53,7 @@ canvas{
 
 <div id="scoreBoard">🏆: 0</div>
 
-<div id="gameWrapper">
-  <canvas id="game" width="400" height="400"></canvas>
-</div>
+<canvas id="game"></canvas>
 
 <div id="menu">
   <h1>Game Over</h1>
@@ -83,12 +75,33 @@ canvas{
 </div>
 
 <script>
-// -------- SCALE --------
-let scale=1;
-zoomInBtn.onclick=()=>wrapper.style.transform=`scale(${scale+=0.1})`;
-zoomOutBtn.onclick=()=>wrapper.style.transform=`scale(${scale=Math.max(0.5,scale-0.1)})`;
+// -------- SCALE SYSTEM (REAL FIX) --------
+let baseGrid = 20;
+let scale = 2;
+let grid;
+const tileCount = 20;
 
-const wrapper=document.getElementById("gameWrapper");
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+function updateScale(){
+  grid = baseGrid * scale;
+
+  canvas.width = grid * tileCount;
+  canvas.height = grid * tileCount;
+
+  ctx.imageSmoothingEnabled = false;
+}
+
+zoomInBtn.onclick = () => {
+  scale += 0.2;
+  updateScale();
+};
+
+zoomOutBtn.onclick = () => {
+  scale = Math.max(1, scale - 0.2);
+  updateScale();
+};
 
 // -------- ENCRYPT --------
 const key="k";
@@ -97,22 +110,17 @@ const dec=s=>{
   try{return parseInt([...atob(s)].map(c=>String.fromCharCode(c.charCodeAt(0)^key.charCodeAt(0))).join(""));}catch{return 0;}
 };
 
-// -------- SETUP --------
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
-
+// -------- UI --------
 const menu=document.getElementById("menu");
 const scoreText=document.getElementById("scoreText");
 const scoreBoard=document.getElementById("scoreBoard");
 const difficultySelect=document.getElementById("difficultySelect");
 const highScoresList=document.getElementById("highScoresList");
 
-const grid=20;
-const tileCount=20;
-
-let snake,pixelSnake,direction,nextDirection;
-let food,score,gameOver,started;
-let moveInterval,lastMove;
+// -------- GAME VARS --------
+let snake, pixelSnake, direction, nextDirection;
+let food, score, gameOver, started;
+let moveInterval, lastMove;
 
 // -------- SPEEDS --------
 const speeds={
@@ -246,20 +254,13 @@ function loop(t){
 
 // -------- DRAW --------
 function draw(){
-  ctx.clearRect(0,0,400,400);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // APPLE (FIXED GRID)
-  ctx.drawImage(
-    appleImg,
-    food.x*grid,
-    food.y*grid,
-    grid,
-    grid
-  );
+  ctx.drawImage(appleImg, food.x*grid, food.y*grid, grid, grid);
 
   pixelSnake.forEach((s,i)=>{
     ctx.save();
-    ctx.translate(s.x*grid+10,s.y*grid+10);
+    ctx.translate(s.x*grid+grid/2, s.y*grid+grid/2);
 
     let angle=0;
     if(i===0){
@@ -267,9 +268,9 @@ function draw(){
       if(direction.x===-1) angle=-Math.PI/2;
       if(direction.y===1) angle=Math.PI;
       ctx.rotate(angle);
-      ctx.drawImage(headImg,-10,-10,20,20);
+      ctx.drawImage(headImg,-grid/2,-grid/2,grid,grid);
     }else{
-      ctx.drawImage(bodyImg,-10,-10,20,20);
+      ctx.drawImage(bodyImg,-grid/2,-grid/2,grid,grid);
     }
 
     ctx.restore();
@@ -320,6 +321,7 @@ resetScoresBtn.onclick=()=>{
 };
 
 // START
+updateScale();
 init();
 requestAnimationFrame(loop);
 </script>
