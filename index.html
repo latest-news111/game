@@ -2,329 +2,293 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Snake (True Scaling)</title>
-
+<title>Smooth Snake with Encrypted High Scores</title>
 <style>
-body{
-  background:#111;
-  color:#fff;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  height:100vh;
-  margin:0;
-  font-family:sans-serif;
-  flex-direction:column;
+body {
+  background: #111;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  margin: 0;
+  font-family: sans-serif;
+  flex-direction: column;
+  touch-action: none; /* Prevent scrolling on mobile */
 }
-
-#topBar{
-  position:absolute;
-  top:10px;
-  left:10px;
-  display:flex;
-  gap:5px;
+#scoreBoard { font-size: 24px; margin-bottom: 20px; }
+canvas {
+  background: #000;
+  border: 6px solid red;
+  width: 800px;
+  height: 800px;
+  image-rendering: pixelated;
 }
-
-canvas{
-  background:#000;
-  border:8px solid red;
-  image-rendering:pixelated;
+#menu {
+  position: absolute;
+  text-align: center;
+  display: none;
+  color: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.85);
+  border: 2px solid #f00;
 }
-
-#menu{
-  position:absolute;
-  display:none;
-  padding:20px;
-  background:rgba(0,0,0,0.95);
-  border:3px solid red;
-  border-radius:10px;
-  text-align:center;
+button { margin: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+select { margin: 10px; padding: 5px 10px; font-size: 16px; }
+.highScores { text-align: left; margin-top: 10px; }
+/* Reset button */
+#resetScoresBtn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 100;
+  padding: 5px 10px;
+  font-size: 14px;
 }
 </style>
 </head>
-
 <body>
-
-<div id="topBar">
-  <button id="resetScoresBtn">Reset</button>
-  <button id="zoomInBtn">➕</button>
-  <button id="zoomOutBtn">➖</button>
-</div>
+<!-- Reset High Scores button -->
+<button id="resetScoresBtn">Reset High Scores</button>
 
 <div id="scoreBoard">🏆: 0</div>
-
-<canvas id="game"></canvas>
-
+<canvas id="game" width="400" height="400"></canvas>
 <div id="menu">
   <h1>Game Over</h1>
   <p id="scoreText"></p>
-
+  <label for="difficultySelect">Difficulty:</label>
   <select id="difficultySelect">
-    <option>Too Easy</option>
-    <option>Easy</option>
-    <option selected>Medium</option>
-    <option>Difficult</option>
-    <option>Hard</option>
-    <option>Impossible</option>
+    <option value="Too Easy">Too Easy</option>
+    <option value="Easy" selected>Easy</option>
+    <option value="Medium">Medium</option>
+    <option value="Difficult">Difficult</option>
+    <option value="Hard">Hard</option>
+    <option value="Impossible">Impossible</option>
   </select>
-
-  <div id="highScoresList"></div>
-
+  <br>
+  <div class="highScores" id="highScoresList"></div>
   <button onclick="restartGame()">Play Again</button>
   <button onclick="quitGame()">Quit</button>
 </div>
 
 <script>
-// -------- SCALE SYSTEM (REAL FIX) --------
-let baseGrid = 20;
-let scale = 2;
-let grid;
-const tileCount = 20;
-
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-
-function updateScale(){
-  grid = baseGrid * scale;
-
-  canvas.width = grid * tileCount;
-  canvas.height = grid * tileCount;
-
-  ctx.imageSmoothingEnabled = false;
+// --- Encryption utilities ---
+const secretKey = "mySuperSecretKey";
+function encryptScore(score){
+  return btoa(JSON.stringify(score).split("").map(c=>String.fromCharCode(c.charCodeAt(0)^secretKey.charCodeAt(0))).join(""));
+}
+function decryptScore(enc){
+  try{
+    return parseInt(String.fromCharCode(...atob(enc).split("").map((c,i)=>c.charCodeAt(0)^secretKey.charCodeAt(0))));
+  } catch { return 0; }
 }
 
-zoomInBtn.onclick = () => {
-  scale += 0.2;
-  updateScale();
-};
+// --- DOM elements ---
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const menu = document.getElementById("menu");
+const scoreText = document.getElementById("scoreText");
+const highScoresList = document.getElementById("highScoresList");
+const scoreBoard = document.getElementById("scoreBoard");
+const difficultySelect = document.getElementById("difficultySelect");
+const resetBtn = document.getElementById("resetScoresBtn");
 
-zoomOutBtn.onclick = () => {
-  scale = Math.max(1, scale - 0.2);
-  updateScale();
-};
+// --- Game variables ---
+const grid = 20;
+let snake=[], direction={x:0,y:-1}, nextDirection={x:0,y:-1};
+let food, score=0, gameOver=false, started=false;
+let moveInterval=100, moveTimer=0;
+let difficulty = difficultySelect.value;
+let prevA=false, prevB=false;
 
-// -------- ENCRYPT --------
-const key="k";
-const enc=s=>btoa([...s].map(c=>String.fromCharCode(c.charCodeAt(0)^key.charCodeAt(0))).join(""));
-const dec=s=>{
-  try{return parseInt([...atob(s)].map(c=>String.fromCharCode(c.charCodeAt(0)^key.charCodeAt(0))).join(""));}catch{return 0;}
-};
+// --- Images ---
+const snakeHeadImg = new Image();
+snakeHeadImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAtklEQVR4AYyOwQ3CQAwED9786IAGePGgByT6oQAkSqAACkCiC140QCsHc2KR4yT2RVr5bO9OvCzBd12tKwosJQREQe0mAZv7oaLLbV8Qb6SQrX8Aht+51Rrcu4Hxat4AGvA3LbKqTANY83dh28F7ajcCDBKuOe9eBdlxN8AGeSNAXQCZT89tseoC2DABr/CCLAwsBGDgZOqcUsBcUPMGeB8fCw1Udb56X5VpAL9Un52PLwRgyPQBAAD//zi8y3MAAAAGSURBVAMACVo+FYZZcBQAAAAASUVORK5CYII=";
+const snakeBodyImg = new Image();
+snakeBodyImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAuklEQVR4AYzOwQ3CMBSD4Sp7cGEBTmzBRAzALFyZgxNLsEarr5KrtE2kVPqVPPvZTbl+HvOR9/8y46i35jJ1vuf31nH2crdgv9aeXvffdCogjvzdntpdQURGDzvwE2wFtdgK88ETdKIQYegRXxD13voCImojd2EeotXnWmAJtTF6L5ohoATuNS0t/voCg5IgEGj8zPVJ3woMQQjHmRZ4ypoFDFjqkaJTQYJZ6BVEPxUwhJ0jNAvyipGCBQAA//8HqZePAAAABklEQVQDAEK1gBkbAveoAAAAAElFTkSuQmCC";
 
-// -------- UI --------
-const menu=document.getElementById("menu");
-const scoreText=document.getElementById("scoreText");
-const scoreBoard=document.getElementById("scoreBoard");
-const difficultySelect=document.getElementById("difficultySelect");
-const highScoresList=document.getElementById("highScoresList");
+// --- Speeds ---
+const speedMap = { "Too Easy":200, "Easy":150, "Medium":100, "Difficult":70, "Hard":50, "Impossible":25 };
 
-// -------- GAME VARS --------
-let snake, pixelSnake, direction, nextDirection;
-let food, score, gameOver, started;
-let moveInterval, lastMove;
-
-// -------- SPEEDS --------
-const speeds={
-  "Too Easy":200,
-  "Easy":150,
-  "Medium":100,
-  "Difficult":70,
-  "Hard":50,
-  "Impossible":25
-};
-
-// -------- IMAGES --------
-const headImg=new Image();
-headImg.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAtklEQVR4AYyOwQ3CQAwED9786IAGePGgByT6oQAkSqAACkCiC140QCsHc2KR4yT2RVr5bO9OvCzBd12tKwosJQREQe0mAZv7oaLLbV8Qb6SQrX8Aht+51Rrcu4Hxat4AGvA3LbKqTANY83dh28F7ajcCDBKuOe9eBdlxN8AGeSNAXQCZT89tseoC2DABr/CCLAwsBGDgZOqcUsBcUPMGeB8fCw1Udb56X5VpAL9Un52PLwRgyPQBAAD//zi8y3MAAAAGSURBVAMACVo+FYZZcBQAAAAASUVORK5CYII=";
-
-const bodyImg=new Image();
-bodyImg.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAuklEQVR4AYzOwQ3CMBSD4Sp7cGEBTmzBRAzALFyZgxNLsEarr5KrtE2kVPqVPPvZTbl+HvOR9/8y46i35jJ1vuf31nH2crdgv9aeXvffdCogjvzdntpdQURGDzvwE2wFtdgK88ETdKIQYegRXxD13voCImojd2EeotXnWmAJtTF6L5ohoATuNS0t/voCg5IgEGj8zPVJ3woMQQjHmRZ4ypoFDFjqkaJTQYJZ6BVEPxUwhJ0jNAvyipGCBQAA//8HqZePAAAABklEQVQDAEK1gBkbAveoAAAAAElFTkSuQmCC";
-
-const appleImg=new Image();
-appleImg.src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA4AAAAPCAYAAADJViUEAAAAbUlEQVR4AWMYBaNgFIyCUQxEw0AEYBxVSFZgYGB4z8DAwMDA8J+BgYHhPwPDfyYmJiYGBgYGhj8DAwMDw38GBgaGfwYGBgaGfxkYGBgYGJj+////PwPDfyYmBgYGhv8MDAwMDAyMjIwMDAwAAHsqDA1H4n8VAAAAAElFTkSuQmCC";
-
-// -------- HIGHSCORES --------
-let highs={};
-Object.keys(speeds).forEach(d=>{
-  highs[d]=dec(localStorage.getItem("snake_"+d))||0;
+// --- High scores ---
+let highScores = {};
+["Too Easy","Easy","Medium","Difficult","Hard","Impossible"].forEach(d=>{
+  highScores[d] = decryptScore(localStorage.getItem("snakeHighScore_"+d)) || 0;
 });
 
-// -------- INIT --------
+// --- Functions ---
 function init(){
-  snake=[{x:10,y:10}];
-  pixelSnake=[{x:10,y:10}];
-
-  direction={x:0,y:-1};
-  nextDirection={x:0,y:-1};
-
-  score=0;
-  gameOver=false;
-  started=false;
-
-  moveInterval=speeds[difficultySelect.value];
-  spawnFood();
-  updateScore();
-  menu.style.display="none";
+  snake=[{x:160,y:160}];
+  direction={x:0,y:-1}; nextDirection={x:0,y:-1};
+  started=false; score=0; gameOver=false;
+  menu.style.display="none"; difficulty=difficultySelect.value;
+  moveInterval=speedMap[difficulty];
+  spawnFood(); updateScore();
+  prevA = prevB = false;
 }
 
 function spawnFood(){
-  food={
-    x:Math.floor(Math.random()*tileCount),
-    y:Math.floor(Math.random()*tileCount)
-  };
+  food={x:Math.floor(Math.random()*20)*grid, y:Math.floor(Math.random()*20)*grid};
 }
 
-// -------- INPUT --------
-window.addEventListener("keydown",e=>{
-  started=true;
-  if((e.key==="ArrowUp"||e.key==="w")&&direction.y===0) nextDirection={x:0,y:-1};
-  if((e.key==="ArrowDown"||e.key==="s")&&direction.y===0) nextDirection={x:0,y:1};
-  if((e.key==="ArrowLeft"||e.key==="a")&&direction.x===0) nextDirection={x:-1,y:0};
-  if((e.key==="ArrowRight"||e.key==="d")&&direction.x===0) nextDirection={x:1,y:0};
-});
+function getGamepadDirection(){
+  const gp = navigator.getGamepads()[0]; if(!gp) return;
 
-// TOUCH
-let sx,sy;
-canvas.addEventListener("touchstart",e=>{
-  sx=e.touches[0].clientX;
-  sy=e.touches[0].clientY;
-});
-canvas.addEventListener("touchend",e=>{
-  let dx=e.changedTouches[0].clientX-sx;
-  let dy=e.changedTouches[0].clientY-sy;
-  started=true;
+  const x = gp.axes[0], y = gp.axes[1], t=0.5;
+  if(Math.abs(x)>Math.abs(y)){
+    if(x>t && direction.x===0){ nextDirection={x:1,y:0}; started=true; }
+    if(x<-t && direction.x===0){ nextDirection={x:-1,y:0}; started=true; }
+  } else {
+    if(y>t && direction.y===0){ nextDirection={x:0,y:1}; started=true; }
+    if(y<-t && direction.y===0){ nextDirection={x:0,y:-1}; started=true; }
+  }
 
-  if(Math.abs(dx)>Math.abs(dy)){
-    if(dx>0 && direction.x===0) nextDirection={x:1,y:0};
-    if(dx<0 && direction.x===0) nextDirection={x:-1,y:0};
-  }else{
-    if(dy>0 && direction.y===0) nextDirection={x:0,y:1};
-    if(dy<0 && direction.y===0) nextDirection={x:0,y:-1};
+  if(gameOver){
+    const currA = gp.buttons[0].pressed;
+    const currB = gp.buttons[1].pressed;
+    if(currA && !prevA) restartGame();
+    if(currB && !prevB) quitGame();
+    prevA = currA; prevB = currB;
+  }
+}
+
+// --- Keyboard ---
+window.addEventListener("keydown", e=>{
+  if(!started) started=true;
+  switch(e.key){
+    case "ArrowUp": case "w": case "W": if(direction.y===0) nextDirection={x:0,y:-1}; break;
+    case "ArrowDown": case "s": case "S": if(direction.y===0) nextDirection={x:0,y:1}; break;
+    case "ArrowLeft": case "a": case "A": if(direction.x===0) nextDirection={x:-1,y:0}; break;
+    case "ArrowRight": case "d": case "D": if(direction.x===0) nextDirection={x:1,y:0}; break;
   }
 });
 
-// -------- MOVE --------
-function moveSnake(){
-  direction=nextDirection;
+// --- Touch Controls ---
+let touchStartX = 0, touchStartY = 0;
+canvas.addEventListener("touchstart", e => {
+  const touch = e.touches[0];
+  touchStartX = touch.clientX;
+  touchStartY = touch.clientY;
+  if(!started) started=true;
+  e.preventDefault();
+}, { passive: false });
 
-  const head={
-    x:snake[0].x+direction.x,
-    y:snake[0].y+direction.y
-  };
+canvas.addEventListener("touchmove", e => e.preventDefault(), { passive: false });
 
-  if(head.x<0||head.y<0||head.x>=tileCount||head.y>=tileCount){
-    showGameOver();return;
+canvas.addEventListener("touchend", e => {
+  const touch = e.changedTouches[0];
+  const dx = touch.clientX - touchStartX;
+  const dy = touch.clientY - touchStartY;
+  const absX = Math.abs(dx), absY = Math.abs(dy);
+  const threshold = 20;
+  if(Math.max(absX, absY) < threshold) return;
+  if(absX > absY){
+    if(dx > 0 && direction.x===0) nextDirection={x:1,y:0};
+    if(dx < 0 && direction.x===0) nextDirection={x:-1,y:0};
+  } else {
+    if(dy > 0 && direction.y===0) nextDirection={x:0,y:1};
+    if(dy < 0 && direction.y===0) nextDirection={x:0,y:-1};
   }
-
-  snake.unshift(head);
-
-  if(head.x===food.x && head.y===food.y){
-    score++; updateScore(); spawnFood();
-  }else{
-    snake.pop();
-    pixelSnake.pop();
-  }
-
-  for(let i=1;i<snake.length;i++){
-    if(head.x===snake[i].x && head.y===snake[i].y){
-      showGameOver();return;
-    }
-  }
-}
-
-// -------- LOOP --------
-function loop(t){
-  if(!started||gameOver){requestAnimationFrame(loop);return;}
-
-  if(!lastMove) lastMove=t;
-
-  if(t-lastMove>moveInterval){
-    moveSnake();
-    lastMove=t;
-  }
-
-  snake.forEach((s,i)=>{
-    if(!pixelSnake[i]) pixelSnake[i]={x:s.x,y:s.y};
-    pixelSnake[i].x+=(s.x-pixelSnake[i].x)*0.25;
-    pixelSnake[i].y+=(s.y-pixelSnake[i].y)*0.25;
-  });
-
-  draw();
-  requestAnimationFrame(loop);
-}
-
-// -------- DRAW --------
-function draw(){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  ctx.drawImage(appleImg, food.x*grid, food.y*grid, grid, grid);
-
-  pixelSnake.forEach((s,i)=>{
-    ctx.save();
-    ctx.translate(s.x*grid+grid/2, s.y*grid+grid/2);
-
-    let angle=0;
-    if(i===0){
-      if(direction.x===1) angle=Math.PI/2;
-      if(direction.x===-1) angle=-Math.PI/2;
-      if(direction.y===1) angle=Math.PI;
-      ctx.rotate(angle);
-      ctx.drawImage(headImg,-grid/2,-grid/2,grid,grid);
-    }else{
-      ctx.drawImage(bodyImg,-grid/2,-grid/2,grid,grid);
-    }
-
-    ctx.restore();
-  });
-}
-
-// -------- UI --------
-function updateScore(){
-  scoreBoard.textContent="🏆: "+score;
-}
+}, { passive: false });
 
 function showGameOver(){
   gameOver=true;
-  let d=difficultySelect.value;
-
-  if(score>highs[d]){
-    highs[d]=score;
-    localStorage.setItem("snake_"+d,enc(score.toString()));
+  if(score>highScores[difficulty]){
+    highScores[difficulty]=score;
+    localStorage.setItem("snakeHighScore_"+difficulty, encryptScore(score));
   }
-
-  scoreText.textContent="Score: "+score;
-
-  highScoresList.innerHTML="<b>High Scores</b><br>";
-  for(let k in highs){
-    highScoresList.innerHTML+=`${k}: ${highs[k]}<br>`;
-  }
-
+  scoreText.textContent=`Score: ${score}`;
+  highScoresList.innerHTML="<strong>High Scores:</strong><br>";
+  for(let d in highScores) highScoresList.innerHTML+=`${d}: ${highScores[d]}<br>`;
   menu.style.display="block";
 }
 
 function restartGame(){init();}
+function quitGame() {
+  menu.innerHTML = "<h1>Thanks for playing!</h1>";
+  menu.style.display = "block";
+  setTimeout(() => {
+    try { window.close(); }
+    catch(e) { alert("Please close the tab to exit the game."); }
+  }, 1000);
+}
+function updateScore(){scoreBoard.textContent=`🏆: ${score}`;}
 
-function quitGame(){
-  menu.innerHTML="<h1>Thanks for playing!</h1>";
-  setTimeout(()=>{
-    try{window.close();}
-    catch{alert("Close tab to exit");}
-  },5000);
+function loop(timestamp){
+  getGamepadDirection();
+  if(!started || gameOver){requestAnimationFrame(loop); return;}
+  if(!moveTimer) moveTimer=timestamp;
+  const delta = timestamp - moveTimer;
+  if(delta >= moveInterval){ moveSnake(); moveTimer = timestamp; }
+  draw();
+  requestAnimationFrame(loop);
 }
 
-// RESET
-resetScoresBtn.onclick=()=>{
-  Object.keys(highs).forEach(d=>{
-    localStorage.removeItem("snake_"+d);
-    highs[d]=0;
-  });
-  alert("Scores reset");
-};
+function moveSnake(){
+  direction = nextDirection;
+  if(direction.x===0 && direction.y===0) return;
+  const head={x:snake[0].x+direction.x*grid, y:snake[0].y+direction.y*grid};
+  if(head.x<0||head.x>=canvas.width||head.y<0||head.y>=canvas.height){showGameOver(); return;}
+  snake.unshift(head);
+  if(head.x===food.x && head.y===food.y){ score++; updateScore(); spawnFood(); }
+  else{ snake.pop(); }
 
-// START
-updateScale();
+  for(let i=1;i<snake.length;i++){
+    if(head.x===snake[i].x && head.y===snake[i].y){ showGameOver(); return; }
+  }
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.font=`${grid*0.9}px serif`;
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillText("🍎", food.x + grid/2, food.y + grid/2);
+
+  snake.forEach((s,i)=>{
+    ctx.save(); ctx.translate(s.x+grid/2, s.y+grid/2);
+    let angle=0;
+    if(i===0){
+      if(direction.x===1) angle=Math.PI/2;
+      else if(direction.x===-1) angle=-Math.PI/2;
+      else if(direction.y===1) angle=Math.PI;
+      ctx.rotate(angle);
+      ctx.drawImage(snakeHeadImg, -grid/2, -grid/2, grid, grid);
+    } else {
+      let prev=snake[i-1];
+      let dx=prev.x-s.x; let dy=prev.y-s.y;
+      if(dx===grid) angle=0; else if(dx===-grid) angle=Math.PI;
+      else if(dy===grid) angle=Math.PI/2; else if(dy===-grid) angle=-Math.PI/2;
+      ctx.rotate(angle);
+      ctx.drawImage(snakeBodyImg, -grid/2, -grid/2, grid, grid);
+    }
+    ctx.restore();
+  });
+}
+
+difficultySelect.addEventListener("change", ()=>{
+  difficulty=difficultySelect.value;
+  moveInterval=speedMap[difficulty];
+});
+
+resetBtn.addEventListener("click", () => {
+  ["Too Easy","Easy","Medium","Difficult","Hard","Impossible"].forEach(d => {
+    localStorage.removeItem("snakeHighScore_" + d);
+    highScores[d] = 0;
+  });
+  if(menu.style.display === "block"){
+    highScoresList.innerHTML = "<strong>High Scores:</strong><br>";
+    for(let d in highScores){
+      highScoresList.innerHTML += `${d}: ${highScores[d]}<br>`;
+    }
+  }
+  alert("All high scores have been reset!");
+});
+
+window.addEventListener("gamepadconnected", e=>console.log("Gamepad connected:", e.gamepad));
+
 init();
 requestAnimationFrame(loop);
 </script>
-
 </body>
 </html>
